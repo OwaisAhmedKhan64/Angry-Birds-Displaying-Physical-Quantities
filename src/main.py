@@ -212,7 +212,11 @@ def bird_landed(arbiter, space, data):
     global bird_in_air
     bird_in_air = False
 
-handler1 = space.on_collision(0, 3, begin = bird_landed)
+# If bird touches anything then timer of Time of Flight stops
+handler1 = space.on_collision(0, 0, begin = bird_landed)
+handler2 = space.on_collision(0, 1, begin = bird_landed)
+handler3 = space.on_collision(0, 2, begin = bird_landed)
+handler4 = space.on_collision(0, 3, begin = bird_landed)
 
 def draw_level_cleared():
     """Draw level cleared"""
@@ -589,4 +593,5 @@ while True:
     draw_level_cleared()
     draw_level_failed()
     pg.display.update()
+
     clock.tick(FPS)
