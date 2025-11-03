@@ -156,6 +156,7 @@ def sling_action():     # Sling behavior
     global Range
     global Height
     global x_Height
+    global bird
     v = vector((sling_x, sling_y), (x_mouse, y_mouse))
     unit_v = unit_vector(v)
     mouse_distance = distance(sling_x, sling_y, x_mouse, y_mouse)
@@ -178,7 +179,7 @@ def sling_action():     # Sling behavior
     if angle > math.pi:
         angle -= 2 * math.pi
     angle = max(-math.pi/2, min(math.pi/2, angle))
-    speed = (mouse_distance * 53) / 5
+    speed = (mouse_distance * 53) / 5       # In pymunk: speed = magnitude of impulse / mass
     g = abs(space.gravity[1])
     vx = speed * math.cos(-angle)
     vy = speed * math.sin(-angle)
@@ -212,10 +213,14 @@ def bird_landed(arbiter, space, data):
     global bird_in_air
     bird_in_air = False
 
+def bird_collided(arbiter, space, data):
+    global bird_hit
+    bird_hit = True
+
 # If bird touches anything then timer of Time of Flight stops
-handler1 = space.on_collision(0, 0, begin = bird_landed)
-handler2 = space.on_collision(0, 1, begin = bird_landed)
-handler3 = space.on_collision(0, 2, begin = bird_landed)
+handler1 = space.on_collision(0, 0, begin = bird_collided)
+handler2 = space.on_collision(0, 1, begin = bird_collided)
+handler3 = space.on_collision(0, 2, begin = bird_collided)
 handler4 = space.on_collision(0, 3, begin = bird_landed)
 
 def draw_level_cleared():
@@ -392,6 +397,7 @@ while True:
             # Release new bird
             mouse_pressed = False
             bird_in_air = True
+            bird_hit = False
             launch_time = time.time()
             time_of_flight = 0
             if level.number_of_birds > 0:
@@ -449,16 +455,17 @@ while True:
                     bird_path = []
                     score = 0
 
-    if bird_in_air:
+    if bird_in_air and not bird_hit:
         time_of_flight = time.time() - launch_time
 
+    # for slowing down the bird when it touches the ground
     if not bird_in_air and birds:
         for bird in birds:
             if bird.body.velocity.length > 5:
                 vx, vy = bird.body.velocity
-                bird.body.velocity = vx * 0.9, vy * 0.9
+                bird.body.velocity = vx * 0.9, vy
             else:
-                bird.body.velocity = (0,0)
+                bird.body.velocity = (0,vy)
 
     x_mouse, y_mouse = pg.mouse.get_pos()
     # Draw background
@@ -593,5 +600,4 @@ while True:
     draw_level_cleared()
     draw_level_failed()
     pg.display.update()
-
     clock.tick(FPS)
