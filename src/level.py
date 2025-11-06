@@ -62,7 +62,7 @@ class Level():
         self.pigs = []
         self.columns = []
         self.beams = []
-        self.number_of_birds = 4
+        self.number_of_birds = 1000
         self.is_practice = True
         if self.bool_space:
             self.number_of_birds = 8
@@ -89,7 +89,7 @@ class Level():
         self.columns.append(Polygon(p, 20, 85, self.space))
         p = (980, 240)
         self.beams.append(Polygon(p, 85, 20, self.space))
-        self.number_of_birds = 1000
+        self.number_of_birds = 4
         if self.bool_space:
             self.number_of_birds = 8
         self.one_star = 30000
