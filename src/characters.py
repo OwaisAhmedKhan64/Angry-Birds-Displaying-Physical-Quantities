@@ -1,6 +1,6 @@
 import pymunk as pm
 from pymunk import Vec2d
-
+import math
 
 class Bird():
     def __init__(self, distance, angle, x, y, space):
@@ -10,7 +10,7 @@ class Bird():
         inertia = pm.moment_for_circle(mass, 0, radius, (0, 0))
         body = pm.Body(mass, inertia)
         body.position = x, y
-        power = distance * 53
+        power = distance * 53           # magnitude of impulse
         impulse = power * Vec2d(1, 0)
         angle = -angle
         body.apply_impulse_at_local_point(impulse.rotated(angle))
