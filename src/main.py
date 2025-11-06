@@ -58,7 +58,6 @@ pg.mixer.music.play(-1)
 # The base of the physics
 FPS = 60
 space = pm.Space()
-#space.damping = 0.98
 space.gravity = (0.0, -700.0)
 bird = None
 pigs = []
@@ -72,8 +71,11 @@ ball_number = 0
 polys_dict = {}
 mouse_distance = 0
 rope_length = 90
+ground_y_pm = 110
+ground_y_pg = screenHeight - 110
 angle = 0
 angle_bird_degrees = 0
+launch_angle = 0
 Range = 0
 velocity = 0
 x_mouse , y_mouse = 0 , 0
@@ -88,6 +90,7 @@ BLACK = (0, 0, 0)
 WHITE = (255, 255, 255)
 sling_x, sling_y = 135, 450
 sling2_x, sling2_y = 160, 450
+sling_y_pm = screenHeight - sling_y
 sling_center = (sling_x+sling2_x)//2
 score = 0
 game_state = 0
@@ -102,9 +105,10 @@ speed = 0
 bird_in_air = False
 bird_on_ground = False
 launch_time = 0
+theoretical_tof = 0
 bird_launched = False
 
-PPM = 50       # Conversion factor from pixels to meters (100 pix = 1 m)
+PPM = 72       # Conversion factor from pixels to meters (92 pix = 1 m)
 
 # Loading fonts
 quantity_font = pg.font.SysFont("Arial", 30)
@@ -116,12 +120,12 @@ wall = False
 # Static floor
 static_body = pm.Body(body_type=pm.Body.STATIC)
 
-ground = pm.Segment(static_body, (0, 60), (5000, 60), 0)
+ground = pm.Segment(static_body, (-2000, 60), (5000, 60), 3)
 ground.elasticity = 0.3
 ground.friction = 5
 ground.collision_type = 3
 
-rightWall = pm.Segment(static_body, (screenWidth, 060.0), (screenWidth, 800.0), 0.0)
+rightWall = pm.Segment(static_body, (screenWidth, 60.0), (screenWidth, 800.0), 0.0)
 rightWall.elasticity = 0.3
 rightWall.friction = 5
 rightWall.collision_type = 3
@@ -150,6 +154,7 @@ def sling_action():     # Sling behavior
     global mouse_distance
     global rope_length
     global angle
+    global launch_angle
     global x_mouse
     global y_mouse
     global speed
@@ -157,10 +162,11 @@ def sling_action():     # Sling behavior
     global Height
     global x_Height
     global bird
+    global theoretical_tof
     v = vector((sling_x, sling_y), (x_mouse, y_mouse))
     unit_v = unit_vector(v)
     mouse_distance = distance(sling_x, sling_y, x_mouse, y_mouse)
-    max_stretch = (unit_v[0]*rope_length+sling_x, unit_v[1]*rope_length+sling_y)
+    #max_stretch = (unit_v[0]*rope_length+sling_x, unit_v[1]*rope_length+sling_y)
     x_redbird = x_mouse - 20
     y_redbird = y_mouse - 20
     if mouse_distance > rope_length:
@@ -170,44 +176,42 @@ def sling_action():     # Sling behavior
     pg.draw.line(screen, BLACK, (sling2_x , sling2_y), (unit_v[0]*(mouse_distance+10)+sling_x, unit_v[1]*(mouse_distance+10)+sling_y) , 5)
     screen.blit(redbird, (x_redbird , y_redbird))
     pg.draw.line(screen, BLACK, (sling_x, sling_y), (unit_v[0]*(mouse_distance+10)+sling_x, unit_v[1]*(mouse_distance+10)+sling_y), 5)
-    # Angle of impulse
+    # Angle calculation
     dy = y_mouse - sling_y
     dx = x_mouse - sling_center
-    if dx == 0:
-        dx = 0.00000000000001
-    angle = math.atan2(dy,dx) + math.pi
-    if angle > math.pi:
-        angle -= 2 * math.pi
-    angle = max(-math.pi/2, min(math.pi/2, angle))
+    angle = math.atan2(dy,dx) - math.pi         # atan2 gives correct quadrant and handles division by zero, subtracted pi to make it
+    launch_angle = -angle               # Pygame's y coordinates are opposite
+    if -angle > math.pi / 2 and -angle < 1.5 * math.pi:         # For opposite pulling of sling
+        angle += math.pi
     speed = (mouse_distance * 53) / 5       # In pymunk: speed = magnitude of impulse / mass
     g = abs(space.gravity[1])
-    vx = speed * math.cos(-angle)
-    vy = speed * math.sin(-angle)
+    vx = speed * math.cos(launch_angle)
+    vy = speed * math.sin(launch_angle)
+    theoretical_tof = (vy + (vy**2 + 2*g*(sling_y_pm - ground_y_pm)) ** 0.5)/g
     if mouse_distance > 10:
         start_x, start_y = sling_center, sling_y
         for step in range(0, 600):
             t = step / 40
             x = start_x + vx * t
             y = start_y + (-vy) * t + 0.5 * g * (t ** 2)
-            if y > screenHeight - 60:
+            if y > screenHeight - 110:
                 break
             pg.draw.circle(screen, (255, 255, 0), (int(x), int(y)), 3)
 
     if speed == 0:
         speed = 0.000000000000001
-    Range = (vx / g) * ((vy + math.sqrt(vy**2 + 2 * g * (200-110))))
+    Range = (vx / g) * (vy + math.sqrt(vy ** 2 + 2 * g * (sling_y_pm - ground_y_pm)))
 
     landing_x = sling_center + Range
-    ground_y = screenHeight - 110
-    pg.draw.line(screen, RED, (sling_center, ground_y + 15), (landing_x, ground_y + 15), 2)
-    pg.draw.line(screen, RED, (landing_x, ground_y), (landing_x, ground_y + 40), 3)
+    pg.draw.line(screen, RED, (sling_center, ground_y_pg + 15), (landing_x, ground_y_pg + 15), 2)
+    pg.draw.line(screen, RED, (landing_x, ground_y_pg), (landing_x, ground_y_pg + 40), 3)
 
-    Height = (vy**2)/(2*g)
+    Height = (vy**2)/(2*g) + 90
     x_Height = (vx * vy)/g + sling_center
-    if -angle < 0:
-        Height = 0
+    if launch_angle > math.pi and launch_angle < 2 * math.pi:
+        Height = 90
         x_Height = sling_center
-    pg.draw.line(screen , BLUE , (x_Height , 540) , (x_Height , 450 - Height) , 3)
+    pg.draw.line(screen , BLUE , (x_Height , 540) , (x_Height , 540 - Height) , 3)
 
 def bird_landed(arbiter, space, data):
     global bird_in_air
@@ -461,8 +465,8 @@ while True:
     # for slowing down the bird when it touches the ground
     if not bird_in_air and birds:
         for bird in birds:
+            vx, vy = bird.body.velocity
             if bird.body.velocity.length > 5:
-                vx, vy = bird.body.velocity
                 bird.body.velocity = vx * 0.9, vy
             else:
                 bird.body.velocity = (0,vy)
@@ -522,13 +526,8 @@ while True:
     for pig in pigs_to_remove:
         space.remove(pig.shape, pig.shape.body)
         pigs.remove(pig)
-    # Draw static lines
-    body = ground.body
-    pv1 = body.position + ground.a.rotated(body.angle)
-    pv2 = body.position + ground.b.rotated(body.angle)
-    p1 = to_pg(pv1)
-    p2 = to_pg(pv2)
-    pg.draw.lines(screen, (150, 150, 150), False, [p1, p2])
+    # Draw static line
+    pg.draw.line(screen, (100, 200, 50), (0 , screenHeight-110), (screenWidth , screenHeight-110))
     i = 0
     # Draw pigs
     for pig in pigs:
@@ -546,32 +545,17 @@ while True:
         y -= h * 0.5
         screen.blit(img, (x, y))
 
-    # Showing physical quantities
-    angle_bird_degrees = math.degrees(angle)
-    angle_surface = quantity_font.render(f"Launch Angle: {-angle_bird_degrees:.2f}°", True, (0, 0, 0))
-    angle_rect = angle_surface.get_rect()
-    angle_rect.x , angle_rect.y = 80, 80
-    screen.blit(angle_surface, angle_rect)
-
-    speed_surface = quantity_font.render(f"Launch Speed: {(speed/PPM):.2f} m/s OR {((speed/PPM)*3.6):.2f} km/h" , True , (0,0,0))
-    speed_rect = speed_surface.get_rect()
-    speed_rect.x , speed_rect.y = 80 , 115
-    screen.blit(speed_surface , speed_rect)
-
-    range_surface = quantity_font.render(f"Range: {(Range/PPM):.2f} m", True, (0, 0, 0))
-    range_rect = range_surface.get_rect()
-    range_rect.x , range_rect.y = 80 , 150
-    screen.blit(range_surface , range_rect)
-
-    height_surface = quantity_font.render(f"Maximum Height: {((Height+90)/PPM):.2f} m", True, (0, 0, 0))
-    height_rect = height_surface.get_rect()
-    height_rect.x, height_rect.y = 80, 185
-    screen.blit(height_surface, height_rect)
-
-    tof_surface = quantity_font.render(f"Time of Flight: {time_of_flight:.2f}s", True, BLACK)
-    tof_rect = tof_surface.get_rect()
-    tof_rect.x , tof_rect.y = 80 , 220
-    screen.blit(tof_surface, tof_rect)
+    lines = [
+        f"Launch Angle: {math.degrees(launch_angle):.2f}°",
+        f"Launch Speed: {(speed / PPM):.2f} m/s OR {((speed / PPM) * 3.6):.2f} km/h",
+        f"Range: {(Range / PPM):.2f} m",
+        f"Maximum Height: {(Height / PPM):.2f} m",
+        f"Sling-to-Ground Time of Flight Using Formula: {theoretical_tof:.2f}s",
+        f"Time of Flight: {time_of_flight:.2f}s"
+    ]
+    for i, text in enumerate (lines):
+        line_surface = quantity_font.render(text, True, (0, 0, 0))
+        screen.blit(line_surface, (80, 80 + i * 35))
 
     # Draw columns and Beams
     for column in columns:
@@ -579,9 +563,10 @@ while True:
     for beam in beams:
         beam.draw_poly('beams', screen)
     # Update physics
-    dt = 1.0/60.0/2.
-    for x in range(2):
-        space.step(dt) # Make two updates per frame for better stability
+    dt = 1.0 / FPS      # Time of a single frame
+    substeps = 2
+    for _ in range(substeps):
+        space.step(dt / substeps) # Make two updates per frame for better stability
 
     # Draw score
     score_font = bold_font.render("SCORE", 1, WHITE)
