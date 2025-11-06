@@ -465,7 +465,6 @@ while True:
     if bird_in_air and not bird_hit:
         tof_simulated = time.time() - launch_time
         range_simulated = bird.body.position.x - sling_center
-        print(bird.body.position.x)
     # for slowing down the bird when it touches the ground
     if not bird_in_air and birds:
         for bird in birds:
