@@ -53,7 +53,7 @@ play_button = buttons.subsurface(play_rect).copy()
 # Load background music
 song1 = "../resources/sounds/angry-birds.ogg"
 pg.mixer.music.load(song1)
-pg.mixer.music.play(-1)
+#pg.mixer.music.play(-1)
 
 # The base of the physics
 FPS = 60
@@ -76,7 +76,7 @@ ground_y_pg = screenHeight - 110
 angle = 0
 angle_bird_degrees = 0
 launch_angle = 0
-Range = 0
+range_theoretical = 0
 velocity = 0
 x_mouse , y_mouse = 0 , 0
 count = 0
@@ -98,15 +98,18 @@ bird_path = []
 counter = 0
 restart_counter = False
 bonus_score_once = True
-time_of_flight = 0
-Height = 0
+tof_simulated = 0
+height = 0
 x_Height = 0
 speed = 0
 bird_in_air = False
 bird_on_ground = False
 launch_time = 0
-theoretical_tof = 0
+tof_theoretical = 0
 bird_launched = False
+launch_x = None
+land_x = None
+range_simulated = 0
 
 PPM = 72       # Conversion factor from pixels to meters (92 pix = 1 m)
 
@@ -158,11 +161,11 @@ def sling_action():     # Sling behavior
     global x_mouse
     global y_mouse
     global speed
-    global Range
-    global Height
+    global range_theoretical
+    global height
     global x_Height
     global bird
-    global theoretical_tof
+    global tof_theoretical
     v = vector((sling_x, sling_y), (x_mouse, y_mouse))
     unit_v = unit_vector(v)
     mouse_distance = distance(sling_x, sling_y, x_mouse, y_mouse)
@@ -181,13 +184,13 @@ def sling_action():     # Sling behavior
     dx = x_mouse - sling_center
     angle = math.atan2(dy,dx) - math.pi         # atan2 gives correct quadrant and handles division by zero, subtracted pi to make it
     launch_angle = -angle               # Pygame's y coordinates are opposite
-    if -angle > math.pi / 2 and -angle < 1.5 * math.pi:         # For opposite pulling of sling
+    if launch_angle > math.pi / 2 and launch_angle < 1.5 * math.pi:         # For opposite pulling of sling
         angle += math.pi
     speed = (mouse_distance * 53) / 5       # In pymunk: speed = magnitude of impulse / mass
     g = abs(space.gravity[1])
     vx = speed * math.cos(launch_angle)
     vy = speed * math.sin(launch_angle)
-    theoretical_tof = (vy + (vy**2 + 2*g*(sling_y_pm - ground_y_pm)) ** 0.5)/g
+    tof_theoretical = (vy + (vy**2 + 2*g*(sling_y_pm - ground_y_pm)) ** 0.5)/g
     if mouse_distance > 10:
         start_x, start_y = sling_center, sling_y
         for step in range(0, 600):
@@ -200,18 +203,18 @@ def sling_action():     # Sling behavior
 
     if speed == 0:
         speed = 0.000000000000001
-    Range = (vx / g) * (vy + math.sqrt(vy ** 2 + 2 * g * (sling_y_pm - ground_y_pm)))
+    range_theoretical = (vx / g) * (vy + math.sqrt(vy ** 2 + 2 * g * (sling_y_pm - ground_y_pm)))
 
-    landing_x = sling_center + Range
+    landing_x = sling_center + range_theoretical
     pg.draw.line(screen, RED, (sling_center, ground_y_pg + 15), (landing_x, ground_y_pg + 15), 2)
     pg.draw.line(screen, RED, (landing_x, ground_y_pg), (landing_x, ground_y_pg + 40), 3)
 
-    Height = (vy**2)/(2*g) + 90
+    height = (vy**2)/(2*g) + 90
     x_Height = (vx * vy)/g + sling_center
     if launch_angle > math.pi and launch_angle < 2 * math.pi:
-        Height = 90
+        height = 90
         x_Height = sling_center
-    pg.draw.line(screen , BLUE , (x_Height , 540) , (x_Height , 540 - Height) , 3)
+    pg.draw.line(screen , BLUE , (x_Height , 540) , (x_Height , 540 - height) , 3)
 
 def bird_landed(arbiter, space, data):
     global bird_in_air
@@ -403,7 +406,7 @@ while True:
             bird_in_air = True
             bird_hit = False
             launch_time = time.time()
-            time_of_flight = 0
+            tof_simulated = 0
             if level.number_of_birds > 0:
                 level.number_of_birds -= 1
                 t1 = time.time()*1000
@@ -460,8 +463,9 @@ while True:
                     score = 0
 
     if bird_in_air and not bird_hit:
-        time_of_flight = time.time() - launch_time
-
+        tof_simulated = time.time() - launch_time
+        range_simulated = bird.body.position.x - sling_center
+        print(bird.body.position.x)
     # for slowing down the bird when it touches the ground
     if not bird_in_air and birds:
         for bird in birds:
@@ -548,15 +552,15 @@ while True:
     lines = [
         f"Launch Angle: {math.degrees(launch_angle):.2f}°",
         f"Launch Speed: {(speed / PPM):.2f} m/s OR {((speed / PPM) * 3.6):.2f} km/h",
-        f"Range: {(Range / PPM):.2f} m",
-        f"Maximum Height: {(Height / PPM):.2f} m",
-        f"Sling-to-Ground Time of Flight Using Formula: {theoretical_tof:.2f}s",
-        f"Time of Flight: {time_of_flight:.2f}s"
+        f"Sling-to-Ground Range Using Formula: {(range_theoretical / PPM):.2f} m",
+        f"Range: {(range_simulated / PPM):.2f} m",
+        f"Maximum Height: {(height / PPM):.2f} m",
+        f"Sling-to-Ground Time of Flight Using Formula: {tof_theoretical:.2f} s",
+        f"Time of Flight: {tof_simulated:.2f} s"
     ]
     for i, text in enumerate (lines):
         line_surface = quantity_font.render(text, True, (0, 0, 0))
         screen.blit(line_surface, (80, 80 + i * 35))
-
     # Draw columns and Beams
     for column in columns:
         column.draw_poly('columns', screen)
